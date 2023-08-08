@@ -7,15 +7,17 @@
 
 import argparse
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2"
 import platform
 import shutil
 from copy import deepcopy
 
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from transformers.generation import GenerationConfig
 from transformers.trainer_utils import set_seed
 
-DEFAULT_CKPT_PATH = 'QWen/QWen-7B-Chat'
+# DEFAULT_CKPT_PATH = 'QWen/QWen-7B-Chat' wen大小写不对
+DEFAULT_CKPT_PATH = 'Qwen-7B-Chat'
 
 _WELCOME_MSG = '''\
 Welcome to use Qwen-7B-Chat model, type text to start chat, type :h to show command help
@@ -46,9 +48,21 @@ def _load_model_tokenizer(args):
     else:
         device_map = "auto"
 
+    # # quantization configuration for NF4 (4 bits)
+    # quantization_config = BitsAndBytesConfig(
+    #     load_in_4bit=True,
+    #     bnb_4bit_quant_type='nf4',
+    #     bnb_4bit_compute_dtype=torch.bfloat16
+    # )
+
+    # quantization configuration for Int8 (8 bits)
+    quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+
     model = AutoModelForCausalLM.from_pretrained(
         args.checkpoint_path,
         device_map=device_map,
+        quantization_config=quantization_config,
+        # max_memory=max_memory,
         trust_remote_code=True,
     ).eval()
     model.generation_config = GenerationConfig.from_pretrained(args.checkpoint_path, trust_remote_code=True)
@@ -177,7 +191,7 @@ def main():
         # Run chat.
         set_seed(seed)
         try:
-            for response in model.chat_stream(tokenizer, query, history=history):
+            for response in model.chat(tokenizer, query, history=history, stream=True):
                 _clear_screen()
                 print(f"\nUser: {query}")
                 print(f"\nQwen-7B: {response}")
